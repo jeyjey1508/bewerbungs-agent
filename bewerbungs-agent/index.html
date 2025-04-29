@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Bewerbungs-Agent</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 2rem;
+        background-color: #f9f9f9;
+      }
+
+      h1,
+      h2 {
+        color: #333;
+        font-size: 2rem;
+      }
+
+      form {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 8px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
+        margin-bottom: 2rem;
+      }
+
+      input,
+      textarea {
+        width: 100%;
+        padding: 0.8rem;
+        margin: 0.5rem 0;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        font-size: 1rem;
+        font-family: inherit;
+        resize: vertical;
+      }
+
+      button {
+        background-color: #2e86de;
+        color: white;
+        padding: 0.8rem 1.5rem;
+        border: none;
+        border-radius: 5px;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: all 0.25s ease;
+        box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+      }
+
+      button:hover {
+        background-color: #2e86de;
+        box-shadow: 0 0 15px #2e86decc;
+        transform: translateY(-3px);
+      }
+
+      button:active {
+        transform: scale(0.96);
+        box-shadow: 0 0 6px #2e86deaa;
+      }
+
+      pre#result {
+        background-color: #fff;
+        border: 1px solid #ddd;
+        padding: 1rem;
+        border-radius: 5px;
+        font-size: 1rem;
+        line-height: 1.6;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+        max-width: 100%;
+      }
+
+      .container {
+        background-color: #fff;
+        padding: 1.5rem;
+        border-radius: 8px;
+        box-shadow: 0 0 8px rgba(0, 0, 0, 0.1);
+      }
+
+      .pdf-btn {
+        margin-top: 1rem;
+      }
+
+      /* 🔁 Responsives Verhalten auf kleineren Geräten */
+      @media (max-width: 600px) {
+        h1 {
+          font-size: 1.5rem;
+        }
+
+        input,
+        textarea,
+        button {
+          font-size: 0.95rem;
+        }
+
+        pre#result {
+          font-size: 0.95rem;
+          line-height: 1.4;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Bewerbung per KI</h1>
+
+    <form id="bewerbungForm">
+      <input type="text" name="vorname" placeholder="Vorname" required />
+      <input type="text" name="nachname" placeholder="Nachname" required />
+      <input type="text" name="beruf" placeholder="Stelle" required />
+      <textarea
+        name="berufserfahrung"
+        placeholder="Berufserfahrung"
+        required
+      ></textarea>
+      <textarea name="stärken" placeholder="Stärken" required></textarea>
+      <textarea name="ausbildung" placeholder="Ausbildung" required></textarea>
+      <input
+        type="text"
+        name="sprachen"
+        placeholder="Sprachkenntnisse"
+        required
+      />
+      <textarea name="motivation" placeholder="Motivation" required></textarea>
+      <button type="submit" id="generateBtn">Bewerbung generieren</button>
+    </form>
+
+    <h2>Deine Bewerbung:</h2>
+    <div class="container">
+      <pre id="result"></pre>
+      <button class="pdf-btn" onclick="downloadPDF()">
+        Als PDF herunterladen
+      </button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script>
+      const form = document.getElementById("bewerbungForm");
+      const result = document.getElementById("result");
+      const generateBtn = document.getElementById("generateBtn");
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        const formData = new FormData(form);
+        const json = Object.fromEntries(formData.entries());
+
+        generateBtn.disabled = true;
+        generateBtn.textContent = "⏳ Generiere...";
+
+        result.textContent = "";
+
+        try {
+          const response = await fetch("/generate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(json),
+          });
+
+          const data = await response.json();
+          result.textContent =
+            data.bewerbung || data.error || "Fehler beim Generieren.";
+        } catch (err) {
+          result.textContent = "Fehler beim Serverkontakt.";
+        }
+
+        generateBtn.disabled = false;
+        generateBtn.textContent = "Bewerbung generieren";
+      });
+
+      async function downloadPDF() {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+
+        const margin = 20;
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        let y = margin;
+        const lines = result.textContent.split("\n");
+
+      lines.forEach((line, index) => {
+        // Absenderblock (Zeile 0–2) → links
+        if (index === 0 || index === 1 || index === 2) {
+          doc.setFontSize(12);
+          doc.setFont(undefined, "normal");
+          doc.text(line.trim(), margin, y);
+          y += 6;
+          return;
+        }
+
+        // Tel / E-Mail → rechtsbündig
+        if (line.includes("Tel:") || line.toLowerCase().includes("e-mail")) {
+          doc.setFontSize(12);
+          doc.setFont(undefined, "normal");
+          const textWidth = doc.getTextWidth(line.trim());
+          doc.text(line.trim(), pageWidth - margin - textWidth, y);
+          y += 6;
+          return;
+        }
+
+        // Empfängerblock (z. B. Musterfirma GmbH) → links
+        if (index >= 5 && index <= 8) {
+          doc.setFontSize(12);
+          doc.setFont(undefined, "normal");
+          doc.text(line.trim(), margin, y);
+          y += 6;
+          return;
+        }
+
+        // Betreff fett & größer
+        if (/^bewerbung (um|als)/i.test(line.trim())) {
+          doc.setFontSize(14);
+          doc.setFont(undefined, "bold");
+        } else {
+          doc.setFontSize(11);
+          doc.setFont(undefined, "normal");
+        }
+
+        const wrapped = doc.splitTextToSize(line.trim(), pageWidth - margin * 2);
+        wrapped.forEach((part) => {
+          if (y > pageHeight - margin) {
+            doc.addPage();
+            y = margin;
+          }
+          doc.text(part, margin, y);
+          y += 8;
+        });
+      });
+    </script>
+  </body>
+</html>
