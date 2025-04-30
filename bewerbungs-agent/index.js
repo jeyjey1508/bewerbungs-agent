@@ -1,13 +1,17 @@
 const path = require("path");
 const express = require("express");
 const bodyParser = require("body-parser");
+const cors = require("cors");
 const axios = require("axios");
 const app = express();
 const port = 3000;
 
+// Middleware
+app.use(cors()); // ← CORS aktivieren
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname)));
 
+// POST-Route
 app.post("/generate", async (req, res) => {
   const {
     vorname,
@@ -61,18 +65,18 @@ app.post("/generate", async (req, res) => {
       },
       {
         headers: {
-          Authorization: `Bearer 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`,
+          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
           "HTTP-Referer": "https://bewerbungs-agent.jeremybusiness.repl.co",
           "X-Title": "Bewerbungs-Agent",
           "Content-Type": "application/json",
         },
-      },
+      }
     );
 
     const text = response.data.choices[0].message.content.trim();
     res.json({ bewerbung: text });
   } catch (error) {
-    console.error("OpenRouter-Fehler:", error.response?.data || error.message);
+    console.error("❌ OpenRouter-Fehler:", error.response?.data || error.message);
     res.status(500).json({
       error:
         "Fehler bei der Bewerbungserstellung: " +
@@ -81,6 +85,7 @@ app.post("/generate", async (req, res) => {
   }
 });
 
+// Server starten
 app.listen(port, () => {
-  console.log(`✅ Server läuft auf Port ${port}`);
+  console.log(`✅ Server läuft auf http://localhost:${port}`);
 });
