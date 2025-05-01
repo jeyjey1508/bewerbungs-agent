@@ -1,91 +1,156 @@
-const path = require("path");
-const express = require("express");
-const bodyParser = require("body-parser");
-const cors = require("cors");
-const axios = require("axios");
+const express = require('express');
+const cors = require('cors');
+const bodyParser = require('body-parser');
+const axios = require('axios');
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
 
 // Middleware
-app.use(cors()); // ← CORS aktivieren
+app.use(cors());
 app.use(bodyParser.json());
-app.use(express.static(path.join(__dirname)));
+app.use(bodyParser.urlencoded({ extended: true }));
 
-// POST-Route
-app.post("/generate", async (req, res) => {
-  const {
-    vorname,
-    nachname,
-    beruf,
-    berufserfahrung,
-    stärken,
-    ausbildung,
-    sprachen,
-    motivation,
-  } = req.body;
+// OpenRouter API-Key
+const API_KEY = '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';
 
-  const prompt = `
-  Du bist ein Bewerbungsexperte. Deine Aufgabe ist es, ein vollständiges, professionelles Bewerbungsschreiben zu erstellen – ohne Erklärungen oder Platzhalter.
-
-  Nutze die folgenden Informationen, um eine realistische Bewerbung zu generieren:
-
-  Vorname: ${vorname}
-  Nachname: ${nachname}
-  Beruf: ${beruf}
-  Berufserfahrung: ${berufserfahrung}
-  Stärken: ${stärken}
-  Ausbildung: ${ausbildung}
-  Sprachen: ${sprachen}
-  Motivation: ${motivation}
-
-  ⚠️ Verwende KEINE eckigen Klammern oder Platzhalter wie [Adresse], [Telefonnummer], [Firma], [Datum] oder [Empfängername].  
-  Wenn bestimmte Informationen nicht gegeben sind, simuliere stattdessen glaubwürdige Daten (z. B. "Musterfirma GmbH", "Musterstraße 12", "12345 Musterstadt").
-
-  Die Bewerbung soll so wirken, als könne sie sofort versendet werden. Der Stil soll professionell, motiviert und individuell sein.
-  `;
-
+// POST-Route zur Generierung der Bewerbung
+app.post('/generate', async (req, res) => {
   try {
+    const {
+      firstName,
+      lastName,
+      email,
+      phone,
+      address,
+      job,
+      experience,
+      strengths,
+      education,
+      languages,
+      motivation,
+      style
+    } = req.body;
+
+    // Validiere Eingaben
+    if (!firstName || !lastName || !job || !experience || !strengths || !education || !languages || !motivation) {
+      return res.status(400).json({ error: 'Alle Pflichtfelder müssen ausgefüllt sein.' });
+    }
+
+    // Bewerber-Informationen
+    const applicantName = `${firstName} ${lastName}`;
+    const applicantContact = `${address}\n${email}\n${phone}`;
+
+    // Beispielfirma und -adresse (statt Platzhalter)
+    const companyName = "Musterfirma GmbH";
+    const companyAddress = "Musterstraße 123\n12345 Musterstadt";
+    const contactPerson = "Frau Müller";
+    
+    // Stil-Vorgaben
+    let stylePrompt = "";
+    switch(style) {
+      case 'formal':
+        stylePrompt = "im formellen, professionellen Stil";
+        break;
+      case 'creative':
+        stylePrompt = "im kreativen, innovativen Stil mit originellen Formulierungen";
+        break;
+      case 'casual':
+        stylePrompt = "im lockeren, persönlichen Stil, aber dennoch professionell";
+        break;
+      default:
+        stylePrompt = "im formellen, professionellen Stil";
+    }
+
+    // Prompt für das KI-Modell
+    const prompt = `
+    Erstelle ein vollständiges Bewerbungsschreiben ${stylePrompt} nach DIN 5008-Standard. 
+    
+    Bewerber-Informationen:
+    - Name: ${applicantName}
+    - Kontakt: ${applicantContact}
+    - Angestrebte Position: ${job}
+    - Berufserfahrung: ${experience}
+    - Stärken & Fähigkeiten: ${strengths}
+    - Ausbildung: ${education}
+    - Sprachkenntnisse: ${languages}
+    - Motivation: ${motivation}
+    
+    Firma:
+    - Name: ${companyName}
+    - Adresse: ${companyAddress}
+    - Kontaktperson: ${contactPerson}
+    
+    Das Bewerbungsschreiben soll folgende Elemente enthalten:
+    1. Absenderadresse oben rechts (rechtsbündig)
+    2. Empfängeradresse (linksbündig)
+    3. Ort und Datum rechts
+    4. Betreffzeile
+    5. Anrede
+    6. Einleitung mit Bezug zur Position
+    7. Hauptteil mit Qualifikationen, Erfahrungen und Stärken
+    8. Abschluss mit Gesprächswunsch
+    9. Grußformel und Name
+    
+    Achte auf einen professionellen Ton und vermeide typische Floskeln. Verwende keine Platzhalter, sondern generiere einen vollständigen, individuellen Text.
+    Formatiere das Ergebnis mit HTML-Tags für die Anzeige im Browser, einschließlich korrekter Absätze und Formatierung nach DIN 5008.
+    `;
+
+    // Anfrage an OpenRouter (GPT-3.5-turbo)
     const response = await axios.post(
-      "https://openrouter.ai/api/v1/chat/completions",
+      'https://openrouter.ai/api/v1/chat/completions',
       {
-        model: "gpt-3.5-turbo",
+        model: 'openai/gpt-3.5-turbo',
         messages: [
-          {
-            role: "system",
-            content:
-              "Du bist ein Bewerbungsexperte. Du hilfst Menschen, perfekte, individuelle Bewerbungen zu schreiben.",
-          },
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-        max_tokens: 500,
-        temperature: 0.7,
+          { role: "system", content: "Du bist ein professioneller Bewerbungsexperte." },
+          { role: "user", content: prompt }
+        ]
       },
       {
         headers: {
-          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          "HTTP-Referer": "https://bewerbungs-agent.jeremybusiness.repl.co",
-          "X-Title": "Bewerbungs-Agent",
-          "Content-Type": "application/json",
-        },
+          'Authorization': `Bearer ${API_KEY}`,
+          'Content-Type': 'application/json'
+        }
       }
     );
 
-    const text = response.data.choices[0].message.content.trim();
-    res.json({ bewerbung: text });
+    // HTML-Formatierung der Bewerbung
+    const formattedApplication = `
+      <div class="letterhead">
+        <div class="company-info">
+          ${companyName}<br>
+          ${companyAddress.replace('\n', '<br>')}
+          <br>
+          z.Hd. ${contactPerson}
+        </div>
+        <div class="contact-info">
+          ${applicantName}<br>
+          ${applicantContact.replace(/\n/g, '<br>')}
+        </div>
+      </div>
+      
+      <div class="date">
+        Musterstadt, ${new Date().toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+      </div>
+      
+      <div class="subject">
+        <strong>Bewerbung als ${job}</strong>
+      </div>
+      
+      ${response.data.choices[0].message.content}
+      
+      <div class="signature">
+        ${applicantName}
+      </div>
+    `;
+
+    res.json({ application: formattedApplication });
   } catch (error) {
-    console.error("❌ OpenRouter-Fehler:", error.response?.data || error.message);
-    res.status(500).json({
-      error:
-        "Fehler bei der Bewerbungserstellung: " +
-        (error.response?.data?.error?.message || error.message),
-    });
+    console.error('Error:', error);
+    res.status(500).json({ error: 'Es gab einen Fehler bei der Erstellung der Bewerbung' });
   }
 });
 
 // Server starten
 app.listen(port, () => {
-  console.log(`✅ Server läuft auf http://localhost:${port}`);
+  console.log(`Server läuft auf Port ${port}`);
 });
